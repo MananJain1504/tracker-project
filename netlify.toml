@@ -5,9 +5,6 @@
 [functions]
   node_bundler = "esbuild"
 
-[[plugins]]
-  package = "@netlify/plugin-csp-nonce"
-
 # Scheduled function for daily reminder at 7:30 AM IST (2:00 UTC)
 [functions."send-reminder"]
   schedule = "0 2 * * *"
