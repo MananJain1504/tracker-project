@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manan — Daily Execution Tracker</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0d0f12">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f12;
+    --surface: #13161b;
+    --surface2: #1a1e25;
+    --border: #252930;
+    --accent: #4fffb0;
+    --accent2: #ff6b35;
+    --accent3: #4a9eff;
+    --muted: #4a5260;
+    --text: #e8eaf0;
+    --text2: #8b92a0;
+    --done: #4fffb0;
+    --skip: #ff4757;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 80px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { max-width: 680px; margin: 0 auto; position: relative; z-index: 1; }
+
+  /* Header */
+  .header { margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .logo { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 4px; }
+  .header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .date-display { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text2); text-align: right; }
+  .date-display .date-big { font-size: 12px; color: var(--text); display: block; margin-bottom: 2px; }
+
+  /* Sync status */
+  .sync-bar { display: flex; align-items: center; gap: 8px; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 12px; }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .sync-dot.synced { background: var(--accent); }
+  .sync-dot.syncing { background: var(--accent3); animation: pulse 1s infinite; }
+  .sync-dot.error { background: var(--skip); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* Progress */
+  .daily-progress { margin-top: 12px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 10px; font-family: 'Space Mono', monospace; color: var(--text2); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .progress-label span:last-child { color: var(--accent); }
+  .progress-bar { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent3)); border-radius: 2px; transition: width 0.4s ease; width: 0%; }
+
+  /* Tabs */
+  .tab-row { display: flex; gap: 4px; margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  .tab-btn { flex: 1; padding: 7px; background: transparent; border: none; border-radius: 5px; cursor: pointer; font-family: 'Space Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text2); transition: all 0.2s; }
+  .tab-btn.active { background: var(--surface2); color: var(--accent); border: 1px solid var(--border); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Week strip */
+  .week-strip { display: flex; gap: 5px; margin-bottom: 20px; }
+  .day-btn { flex: 1; padding: 7px 3px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s; font-family: 'Space Mono', monospace; }
+  .day-btn:hover { border-color: var(--muted); }
+  .day-btn.active { border-color: var(--accent); background: rgba(79,255,176,0.06); }
+  .day-btn .day-name { font-size: 8px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 3px; }
+  .day-btn .day-num { font-size: 12px; color: var(--text); font-weight: 700; }
+  .day-btn.active .day-num { color: var(--accent); }
+  .day-btn .day-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--border); margin: 3px auto 0; transition: background 0.2s; }
+  .day-btn.has-activity .day-dot { background: var(--accent); }
+
+  /* Stats */
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 20px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
+  .stat-value { font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700; color: var(--accent); display: block; margin-bottom: 3px; }
+  .stat-label { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; font-family: 'Space Mono', monospace; }
+
+  /* Section label */
+  .section-label { font-family: 'Space Mono', monospace; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; margin-top: 20px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* Task blocks */
+  .task-block { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; margin-bottom: 7px; display: flex; align-items: center; gap: 12px; transition: all 0.2s; cursor: pointer; position: relative; overflow: hidden; }
+  .task-block::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); opacity: 0; transition: opacity 0.2s; }
+  .task-block:hover { border-color: var(--muted); background: var(--surface2); }
+  .task-block.done { border-color: rgba(79,255,176,0.2); background: rgba(79,255,176,0.04); }
+  .task-block.done::before { opacity: 1; }
+  .task-block.skipped { border-color: rgba(255,71,87,0.2); opacity: 0.6; }
+  .task-block.skipped::before { background: var(--skip); opacity: 1; }
+  .task-check { width: 20px; height: 20px; border-radius: 5px; border: 1.5px solid var(--muted); flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all 0.2s; font-size: 11px; }
+  .task-block.done .task-check { background: var(--accent); border-color: var(--accent); color: #0d0f12; }
+  .task-block.skipped .task-check { background: var(--skip); border-color: var(--skip); color: white; }
+  .task-info { flex: 1; min-width: 0; }
+  .task-name { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+  .task-block.done .task-name { color: var(--text2); }
+  .task-meta { font-size: 10px; color: var(--text2); font-family: 'Space Mono', monospace; display: flex; gap: 10px; }
+  .task-meta .duration { color: var(--accent3); }
+  .task-meta .category { color: var(--muted); }
+  .task-actions { display: flex; gap: 5px; flex-shrink: 0; }
+  .task-action-btn { width: 26px; height: 26px; border-radius: 5px; border: 1px solid var(--border); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--text2); transition: all 0.15s; }
+  .task-action-btn:hover { border-color: var(--muted); color: var(--text); }
+  .task-action-btn.skip-btn:hover { border-color: var(--skip); color: var(--skip); }
+
+  /* Notes */
+  .notes-area { margin-top: 20px; }
+  .notes-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .notes-input { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; resize: none; outline: none; min-height: 75px; transition: border-color 0.2s; line-height: 1.6; }
+  .notes-input::placeholder { color: var(--muted); }
+  .notes-input:focus { border-color: var(--muted); }
+
+  /* AI Panel */
+  .ai-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-top: 12px; }
+  .ai-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .ai-label { font-family: 'Space Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent3); }
+  .ai-result { font-size: 12px; color: var(--text2); line-height: 1.7; min-height: 40px; }
+  .ai-result.loading { color: var(--muted); font-style: italic; }
+  .ai-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .ai-btn { padding: 6px 12px; background: transparent; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-family: 'Space Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text2); transition: all 0.2s; }
+  .ai-btn:hover { border-color: var(--accent3); color: var(--accent3); }
+  .ai-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Buttons */
+  .action-row { display: flex; gap: 8px; margin-top: 16px; }
+  .save-btn { flex: 1; padding: 12px; background: transparent; border: 1px solid var(--accent); border-radius: 10px; color: var(--accent); font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; transition: all 0.2s; }
+  .save-btn:hover { background: rgba(79,255,176,0.08); }
+  .notif-btn { padding: 12px 16px; background: transparent; border: 1px solid var(--border); border-radius: 10px; color: var(--text2); font-family: 'Space Mono', monospace; font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .notif-btn:hover { border-color: var(--muted); color: var(--text); }
+  .notif-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  /* Week view */
+  .heatmap { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+  .heatmap-cell { aspect-ratio: 1; border-radius: 4px; background: var(--surface); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-size: 7px; color: var(--muted); flex-direction: column; gap: 2px; }
+  .heatmap-cell.level-1 { background: rgba(79,255,176,0.1); border-color: rgba(79,255,176,0.2); }
+  .heatmap-cell.level-2 { background: rgba(79,255,176,0.2); border-color: rgba(79,255,176,0.3); }
+  .heatmap-cell.level-3 { background: rgba(79,255,176,0.35); border-color: rgba(79,255,176,0.5); color: #0d0f12; }
+  .hcell-day { font-size: 7px; }
+  .hcell-score { font-size: 9px; font-weight: 700; }
+
+  /* Log */
+  .log-entry { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; margin-bottom: 7px; }
+  .log-entry-header { display: flex; justify-content: space-between; margin-bottom: 7px; }
+  .log-date { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text); }
+  .log-pct { font-family: 'Space Mono', monospace; font-size: 11px; }
+  .log-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .log-chip { font-size: 10px; font-family: 'Space Mono', monospace; padding: 2px 7px; border-radius: 4px; border: 1px solid var(--border); }
+  .log-chip.done { border-color: rgba(79,255,176,0.3); color: var(--accent); }
+  .log-chip.skipped { border-color: rgba(255,71,87,0.3); color: var(--skip); }
+  .log-chip.none { color: var(--muted); }
+  .log-note { font-size: 12px; color: var(--text2); border-top: 1px solid var(--border); padding-top: 7px; margin-top: 6px; line-height: 1.6; }
+  .log-ai-note { font-size: 11px; color: var(--accent3); border-top: 1px solid var(--border); padding-top: 7px; margin-top: 6px; line-height: 1.6; font-style: italic; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--surface2); border: 1px solid var(--accent); border-radius: 8px; padding: 9px 18px; font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent); letter-spacing: 0.08em; transition: transform 0.3s ease; z-index: 999; white-space: nowrap; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.error { border-color: var(--skip); color: var(--skip); }
+
+  /* Loading overlay */
+  .loading-overlay { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 100; flex-direction: column; gap: 12px; }
+  .loading-overlay.hidden { display: none; }
+  .loading-text { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text2); letter-spacing: 0.1em; }
+  .loading-bar { width: 120px; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+  .loading-bar-fill { height: 100%; background: var(--accent); border-radius: 1px; animation: loadingAnim 1.2s ease-in-out infinite; }
+  @keyframes loadingAnim { 0%{width:0%} 50%{width:70%} 100%{width:100%} }
+
+  @media (max-width: 480px) {
+    .task-meta { flex-direction: column; gap: 1px; }
+    .header h1 { font-size: 17px; }
+    .action-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+  <div class="loading-text">Loading data...</div>
+</div>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="logo">// RTL Job Prep</div>
+        <h1>Daily Execution</h1>
+      </div>
+      <div class="date-display">
+        <span class="date-big" id="currentDate">—</span>
+        <span id="currentTime">—</span>
+      </div>
+    </div>
+    <div class="sync-bar">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncStatus">Connecting...</span>
+    </div>
+    <div class="daily-progress">
+      <div class="progress-label">
+        <span>Today's completion</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-row">
+    <button class="tab-btn active" onclick="switchTab('today', this)">Today</button>
+    <button class="tab-btn" onclick="switchTab('week', this)">Week</button>
+    <button class="tab-btn" onclick="switchTab('log', this)">Log</button>
+  </div>
+
+  <!-- TODAY -->
+  <div class="tab-content active" id="tab-today">
+    <div class="week-strip" id="weekStrip"></div>
+
+    <div class="stats-row">
+      <div class="stat-card"><span class="stat-value" id="streakVal">—</span><span class="stat-label">Streak</span></div>
+      <div class="stat-card"><span class="stat-value" id="weekDoneVal">—</span><span class="stat-label">This Week</span></div>
+      <div class="stat-card"><span class="stat-value" id="totalDaysVal">—</span><span class="stat-label">Total Days</span></div>
+    </div>
+
+    <!-- Weekday tasks -->
+    <div id="weekdayTasks">
+      <div class="section-label">Core · Weekday</div>
+      <div class="task-block" id="task-rtl" onclick="cycleTask('rtl')">
+        <div class="task-check" id="check-rtl"></div>
+        <div class="task-info"><div class="task-name">RV32I RTL Project</div><div class="task-meta"><span class="duration">45 min</span><span class="category">Anchor</span></div></div>
+        <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('rtl')" title="Skip">✕</button></div>
+      </div>
+      <div class="task-block" id="task-fundamentals" onclick="cycleTask('fundamentals')">
+        <div class="task-check" id="check-fundamentals"></div>
+        <div class="task-info"><div class="task-name">Digital Design Fundamentals</div><div class="task-meta"><span class="duration">30 min</span><span class="category">Interview Prep</span></div></div>
+        <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('fundamentals')" title="Skip">✕</button></div>
+      </div>
+      <div class="task-block" id="task-applications" onclick="cycleTask('applications')">
+        <div class="task-check" id="check-applications"></div>
+        <div class="task-info"><div class="task-name">Job Applications & Outreach</div><div class="task-meta"><span class="duration">20 min</span><span class="category">Execution</span></div></div>
+        <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('applications')" title="Skip">✕</button></div>
+      </div>
+    </div>
+
+    <!-- Weekend tasks -->
+    <div id="weekendTasks" style="display:none">
+      <div class="section-label">Core · Weekend</div>
+      <div class="task-block" id="task-deepwork" onclick="cycleTask('deepwork')">
+        <div class="task-check" id="check-deepwork"></div>
+        <div class="task-info"><div class="task-name">Deep Work Session</div><div class="task-meta"><span class="duration">2 hrs</span><span class="category">RTL or Weak Area</span></div></div>
+        <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('deepwork')" title="Skip">✕</button></div>
+      </div>
+      <div class="task-block" id="task-github" onclick="cycleTask('github')">
+        <div class="task-check" id="check-github"></div>
+        <div class="task-info"><div class="task-name">GitHub / Resume Hygiene</div><div class="task-meta"><span class="duration">30 min</span><span class="category">Visibility</span></div></div>
+        <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('github')" title="Skip">✕</button></div>
+      </div>
+    </div>
+
+    <div class="section-label">Optional</div>
+    <div class="task-block" id="task-health" onclick="cycleTask('health')">
+      <div class="task-check" id="check-health"></div>
+      <div class="task-info"><div class="task-name">Health / Sleep Routine</div><div class="task-meta"><span class="duration">Daily</span><span class="category">Stability</span></div></div>
+      <div class="task-actions"><button class="task-action-btn skip-btn" onclick="event.stopPropagation();skipTask('health')" title="Skip">✕</button></div>
+    </div>
+
+    <!-- Notes + AI -->
+    <div class="notes-area">
+      <div class="section-label">Notes / Blockers</div>
+      <textarea class="notes-input" id="dailyNotes" placeholder="What did you work on? Any blockers? Keep it brief." rows="3"></textarea>
+
+      <div class="ai-panel">
+        <div class="ai-panel-header">
+          <span class="ai-label">✦ Gemini AI</span>
+        </div>
+        <div class="ai-result" id="aiResult">Use the buttons below to get AI-powered insights.</div>
+        <div class="ai-actions">
+          <button class="ai-btn" onclick="runAI('summarize')">Summarize Notes</button>
+          <button class="ai-btn" onclick="runAI('suggest')">Tomorrow's Focus</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="save-btn" onclick="saveDay()">↓ Save Day</button>
+      <button class="notif-btn" id="notifBtn" onclick="toggleNotifications()">🔔 Reminders</button>
+    </div>
+  </div>
+
+  <!-- WEEK -->
+  <div class="tab-content" id="tab-week">
+    <div class="section-label">7-Day Heatmap</div>
+    <div class="heatmap" id="heatmapGrid"></div>
+    <div style="font-size:10px;color:var(--text2);font-family:'Space Mono',monospace;margin-top:6px;margin-bottom:20px;">Darker = more tasks completed</div>
+
+    <div class="ai-panel">
+      <div class="ai-panel-header"><span class="ai-label">✦ Gemini Weekly Analysis</span></div>
+      <div class="ai-result" id="weekAiResult">Click below to analyze your patterns.</div>
+      <div class="ai-actions">
+        <button class="ai-btn" onclick="runWeekAI()">Analyze My Week</button>
+      </div>
+    </div>
+
+    <div class="section-label">Summary</div>
+    <div id="weekSummary" style="font-size:12px;color:var(--text2);line-height:1.8;"></div>
+  </div>
+
+  <!-- LOG -->
+  <div class="tab-content" id="tab-log">
+    <div class="section-label">Past Entries</div>
+    <div id="logList"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast">Saved.</div>
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONFIG — these are replaced at build time / env vars
+// ════════════════════════════════════════════════════════
+const SUPABASE_URL     = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON    = 'YOUR_SUPABASE_ANON_KEY';
+const VAPID_PUBLIC_KEY = 'BL7n3jZIUobBTFGMSbsKEcQdzaKjGsqHPSINdcoZh_fVit8kuGPznwaFUHG-c1w0a4k7mYCneohmrcFQAqB6NeY';
+
+// Simple fixed user ID — no auth, single user tracker
+const USER_ID = 'manan';
+
+// ════════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════════
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const WEEKDAY_TASKS = ['rtl','fundamentals','applications','health'];
+const WEEKEND_TASKS = ['deepwork','github','health'];
+const TASK_NAMES = {
+  rtl: 'RV32I RTL', fundamentals: 'Fundamentals', applications: 'Applications',
+  health: 'Health', deepwork: 'Deep Work', github: 'GitHub'
+};
+
+let localCache = {};          // date → {tasks, notes, ai_summary, ai_suggestion}
+let currentDayKey = getTodayKey();
+let notifEnabled = false;
+
+// ════════════════════════════════════════════════════════
+// DATE / TIME
+// ════════════════════════════════════════════════════════
+function getTodayKey() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function updateDateTime() {
+  const now = new Date();
+  const D = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const M = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('currentDate').textContent =
+    `${D[now.getDay()]} ${now.getDate()} ${M[now.getMonth()]}`;
+  document.getElementById('currentTime').textContent =
+    now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ════════════════════════════════════════════════════════
+// SYNC STATUS
+// ════════════════════════════════════════════════════════
+function setSyncStatus(status, text) {
+  const dot = document.getElementById('syncDot');
+  const label = document.getElementById('syncStatus');
+  dot.className = 'sync-dot ' + status;
+  label.textContent = text;
+}
+
+// ════════════════════════════════════════════════════════
+// LOAD DATA FROM SUPABASE
+// ════════════════════════════════════════════════════════
+async function loadAllData() {
+  setSyncStatus('syncing','Syncing...');
+  try {
+    const today = new Date();
+    const from = new Date(today); from.setDate(today.getDate()-30);
+    const fromStr = from.toISOString().slice(0,10);
+
+    const { data, error } = await supabase
+      .from('daily_logs')
+      .select('*')
+      .eq('user_id', USER_ID)
+      .gte('date', fromStr)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+
+    localCache = {};
+    (data || []).forEach(row => {
+      localCache[row.date] = {
+        tasks: row.tasks || {},
+        notes: row.notes || '',
+        ai_summary: row.ai_summary || '',
+        ai_suggestion: row.ai_suggestion || ''
+      };
+    });
+
+    setSyncStatus('synced','Synced');
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    renderAll();
+  } catch (err) {
+    setSyncStatus('error','Offline — using local data');
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    renderAll();
+    console.error('Load error:', err);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// SAVE TO SUPABASE
+// ════════════════════════════════════════════════════════
+async function saveDay() {
+  const notes = document.getElementById('dailyNotes').value;
+  const entry = localCache[currentDayKey] || { tasks:{}, notes:'', ai_summary:'', ai_suggestion:'' };
+  entry.notes = notes;
+  localCache[currentDayKey] = entry;
+
+  setSyncStatus('syncing','Saving...');
+  try {
+    const { error } = await supabase
+      .from('daily_logs')
+      .upsert({
+        date: currentDayKey,
+        user_id: USER_ID,
+        tasks: entry.tasks,
+        notes: entry.notes,
+        ai_summary: entry.ai_summary || '',
+        ai_suggestion: entry.ai_suggestion || '',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'date,user_id' });
+
+    if (error) throw error;
+    setSyncStatus('synced','Saved ✓');
+    showToast('Saved ✓');
+    buildWeekStrip();
+    renderLog();
+  } catch(err) {
+    setSyncStatus('error','Save failed');
+    showToast('Save failed — check console', true);
+    console.error('Save error:', err);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// TASK INTERACTION
+// ════════════════════════════════════════════════════════
+function getDayEntry(key) {
+  return localCache[key] || { tasks:{}, notes:'', ai_summary:'', ai_suggestion:'' };
+}
+
+function isWeekend(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return d.getDay() === 0 || d.getDay() === 6;
+}
+
+function getActiveTasks(dateStr) {
+  return isWeekend(dateStr) ? WEEKEND_TASKS : WEEKDAY_TASKS;
+}
+
+function cycleTask(taskId) {
+  const entry = getDayEntry(currentDayKey);
+  const cur = entry.tasks[taskId] || 'none';
+  entry.tasks[taskId] = (cur === 'none' || cur === 'skipped') ? 'done' : 'none';
+  localCache[currentDayKey] = entry;
+  renderTasks();
+  autoSave();
+}
+
+function skipTask(taskId) {
+  const entry = getDayEntry(currentDayKey);
+  const cur = entry.tasks[taskId] || 'none';
+  entry.tasks[taskId] = cur === 'skipped' ? 'none' : 'skipped';
+  localCache[currentDayKey] = entry;
+  renderTasks();
+  autoSave();
+}
+
+let autoSaveTimer = null;
+function autoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => saveDay(), 1500);
+}
+
+// ════════════════════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════════════════════
+function renderAll() {
+  buildWeekStrip();
+  renderTasks();
+  updateStats();
+}
+
+function renderTasks() {
+  const entry = getDayEntry(currentDayKey);
+  const weekend = isWeekend(currentDayKey);
+
+  document.getElementById('weekdayTasks').style.display = weekend ? 'none' : 'block';
+  document.getElementById('weekendTasks').style.display  = weekend ? 'block' : 'none';
+
+  const allTasks = [...new Set([...WEEKDAY_TASKS,...WEEKEND_TASKS])];
+  allTasks.forEach(id => {
+    const block = document.getElementById('task-' + id);
+    const check = document.getElementById('check-' + id);
+    if (!block) return;
+    const status = entry.tasks[id] || 'none';
+    block.className = 'task-block' + (status==='done'?' done':'') + (status==='skipped'?' skipped':'');
+    check.textContent = status==='done' ? '✓' : status==='skipped' ? '✕' : '';
+  });
+
+  document.getElementById('dailyNotes').value = entry.notes || '';
+  updateProgress();
+}
+
+function updateProgress() {
+  const pct = getCompletionPct(currentDayKey);
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+}
+
+function getCompletionPct(key) {
+  const entry = getDayEntry(key);
+  const tasks = getActiveTasks(key);
+  const done = tasks.filter(t => entry.tasks[t] === 'done').length;
+  return Math.round((done / tasks.length) * 100);
+}
+
+function updateStats() {
+  const today = new Date();
+
+  // Streak
+  let streak = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    if (getCompletionPct(d.toISOString().slice(0,10)) >= 50) streak++;
+    else break;
+  }
+
+  // Week
+  let weekDone = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    if (getCompletionPct(d.toISOString().slice(0,10)) >= 50) weekDone++;
+  }
+
+  const totalDays = Object.keys(localCache).filter(k => getCompletionPct(k) >= 50).length;
+
+  document.getElementById('streakVal').textContent = streak;
+  document.getElementById('weekDoneVal').textContent = weekDone + '/7';
+  document.getElementById('totalDaysVal').textContent = totalDays;
+}
+
+function buildWeekStrip() {
+  const strip = document.getElementById('weekStrip');
+  strip.innerHTML = '';
+  const DAYS = ['S','M','T','W','T','F','S'];
+  const today = new Date();
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    const key = d.toISOString().slice(0,10);
+    const isToday = i===0;
+    const entry = getDayEntry(key);
+    const hasAny = Object.values(entry.tasks).some(v=>v==='done');
+
+    const btn = document.createElement('div');
+    btn.className = 'day-btn'+(isToday?' active':'')+(hasAny?' has-activity':'');
+    btn.innerHTML = `<span class="day-name">${DAYS[d.getDay()]}</span><span class="day-num">${d.getDate()}</span><div class="day-dot"></div>`;
+    btn.addEventListener('click', () => { currentDayKey = key; renderTasks(); buildWeekStrip(); });
+    strip.appendChild(btn);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// WEEK VIEW
+// ════════════════════════════════════════════════════════
+function renderWeekView() {
+  const grid = document.getElementById('heatmapGrid');
+  const summary = document.getElementById('weekSummary');
+  grid.innerHTML = '';
+  const today = new Date();
+  const DAYS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let totalDone=0, totalTasks=0, notes=[];
+
+  for (let i=6; i>=0; i--) {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    const k = d.toISOString().slice(0,10);
+    const pct = getCompletionPct(k);
+    const entry = getDayEntry(k);
+    const active = getActiveTasks(k);
+    totalDone += active.filter(t=>entry.tasks[t]==='done').length;
+    totalTasks += active.length;
+    if (entry.notes) notes.push({date:k, note:entry.notes});
+
+    let level = 0;
+    if (pct>=33) level=1; if (pct>=66) level=2; if (pct>=100) level=3;
+    const cell = document.createElement('div');
+    cell.className = `heatmap-cell level-${level}`;
+    cell.innerHTML = `<span class="hcell-day">${DAYS[d.getDay()]}</span><span class="hcell-score">${pct}%</span>`;
+    grid.appendChild(cell);
+  }
+
+  const weekPct = totalTasks>0 ? Math.round((totalDone/totalTasks)*100):0;
+  let html = `Week: <strong style="color:var(--accent)">${weekPct}%</strong> (${totalDone}/${totalTasks} tasks)<br><br>`;
+  if (notes.length>0) {
+    html += `<strong style="color:var(--text)">Recent notes:</strong><br>`;
+    notes.slice(-3).forEach(n=>{
+      html += `<span style="color:var(--muted)">${n.date}</span> — ${n.note.slice(0,90)}${n.note.length>90?'…':''}<br>`;
+    });
+  }
+  summary.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════
+// LOG VIEW
+// ════════════════════════════════════════════════════════
+function renderLog() {
+  const list = document.getElementById('logList');
+  const sorted = Object.keys(localCache).sort().reverse();
+  if (sorted.length===0) {
+    list.innerHTML = `<div style="color:var(--muted);font-size:12px;font-family:'Space Mono',monospace;">No entries yet.</div>`;
+    return;
+  }
+  list.innerHTML = sorted.slice(0,30).map(key => {
+    const entry = getDayEntry(key);
+    const pct = getCompletionPct(key);
+    const tasks = getActiveTasks(key);
+    const pctColor = pct>=66?'var(--accent)':pct>=33?'var(--accent3)':'var(--muted)';
+    const chips = tasks.map(t=>{
+      const s = entry.tasks[t]||'none';
+      return `<span class="log-chip ${s}">${s==='done'?'✓':s==='skipped'?'✕':'○'} ${TASK_NAMES[t]||t}</span>`;
+    }).join('');
+    const noteHtml = entry.notes ? `<div class="log-note">${entry.notes}</div>` : '';
+    const aiHtml = entry.ai_summary ? `<div class="log-ai-note">✦ ${entry.ai_summary}</div>` : '';
+    return `<div class="log-entry">
+      <div class="log-entry-header">
+        <span class="log-date">${key}</span>
+        <span class="log-pct" style="color:${pctColor}">${pct}%</span>
+      </div>
+      <div class="log-chips">${chips}</div>
+      ${noteHtml}${aiHtml}
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// GEMINI AI
+// ════════════════════════════════════════════════════════
+async function runAI(mode) {
+  const resultEl = document.getElementById('aiResult');
+  resultEl.className = 'ai-result loading';
+  resultEl.textContent = 'Thinking...';
+
+  document.querySelectorAll('.ai-btn').forEach(b=>b.disabled=true);
+
+  const entry = getDayEntry(currentDayKey);
+  const notes = document.getElementById('dailyNotes').value;
+
+  try {
+    const res = await fetch('/.netlify/functions/ai-analyze', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ mode, notes, todayTasks: entry.tasks })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    resultEl.className = 'ai-result';
+    resultEl.textContent = data.result;
+
+    // Persist AI output to Supabase
+    if (mode==='summarize') {
+      entry.ai_summary = data.result;
+    } else if (mode==='suggest') {
+      entry.ai_suggestion = data.result;
+    }
+    localCache[currentDayKey] = entry;
+    await saveDay();
+
+  } catch(err) {
+    resultEl.className = 'ai-result';
+    resultEl.textContent = 'AI request failed: ' + err.message;
+  } finally {
+    document.querySelectorAll('.ai-btn').forEach(b=>b.disabled=false);
+  }
+}
+
+async function runWeekAI() {
+  const resultEl = document.getElementById('weekAiResult');
+  resultEl.className = 'ai-result loading';
+  resultEl.textContent = 'Analyzing patterns...';
+
+  document.querySelectorAll('#tab-week .ai-btn').forEach(b=>b.disabled=true);
+
+  const today = new Date();
+  const weekData = [];
+  for (let i=6; i>=0; i--) {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    const k = d.toISOString().slice(0,10);
+    const entry = getDayEntry(k);
+    weekData.push({date:k, tasks:entry.tasks, notes:entry.notes});
+  }
+
+  try {
+    const res = await fetch('/.netlify/functions/ai-analyze', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mode:'analyze', weekData })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    resultEl.className = 'ai-result';
+    resultEl.textContent = data.result;
+  } catch(err) {
+    resultEl.className = 'ai-result';
+    resultEl.textContent = 'AI request failed: ' + err.message;
+  } finally {
+    document.querySelectorAll('#tab-week .ai-btn').forEach(b=>b.disabled=false);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS
+// ════════════════════════════════════════════════════════
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4-base64String.length%4)%4);
+  const base64 = (base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i=0;i<raw.length;i++) output[i]=raw.charCodeAt(i);
+  return output;
+}
+
+async function toggleNotifications() {
+  const btn = document.getElementById('notifBtn');
+
+  if (notifEnabled) {
+    // Unsubscribe
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) await sub.unsubscribe();
+    notifEnabled = false;
+    btn.textContent = '🔔 Reminders';
+    btn.classList.remove('active');
+    showToast('Reminders off');
+    return;
+  }
+
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    showToast('Push not supported in this browser', true);
+    return;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    showToast('Notification permission denied', true);
+    return;
+  }
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+
+    // Save subscription to Supabase via function
+    const res = await fetch('/.netlify/functions/save-subscription', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ user_id: USER_ID, subscription: sub.toJSON() })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error('Save failed');
+
+    notifEnabled = true;
+    btn.textContent = '🔔 On';
+    btn.classList.add('active');
+    showToast('Reminders enabled — 7:30 AM IST daily');
+  } catch(err) {
+    showToast('Failed to enable reminders', true);
+    console.error('Push setup error:', err);
+  }
+}
+
+// Check existing subscription on load
+async function checkExistingSubscription() {
+  if (!('serviceWorker' in navigator)) return;
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    notifEnabled = true;
+    const btn = document.getElementById('notifBtn');
+    btn.textContent = '🔔 On';
+    btn.classList.add('active');
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  if (tab==='week') renderWeekView();
+  if (tab==='log') renderLog();
+}
+
+// ════════════════════════════════════════════════════════
+// TOAST
+// ════════════════════════════════════════════════════════
+let toastTimer = null;
+function showToast(msg, isError=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError?' error':'') + ' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 2500);
+}
+
+// ════════════════════════════════════════════════════════
+// SERVICE WORKER REGISTRATION
+// ════════════════════════════════════════════════════════
+async function registerSW() {
+  if ('serviceWorker' in navigator) {
+    try {
+      await navigator.serviceWorker.register('/sw.js');
+    } catch(err) {
+      console.warn('SW registration failed:', err);
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════════════
+async function init() {
+  updateDateTime();
+  setInterval(updateDateTime, 30000);
+  await registerSW();
+  await loadAllData();
+  await checkExistingSubscription();
+}
+
+init();
+</script>
+</body>
+</html>
