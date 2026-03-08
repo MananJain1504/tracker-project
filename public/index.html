@@ -387,11 +387,12 @@ function setSyncStatus(status, text) {
 // LOAD DATA FROM SUPABASE
 // ════════════════════════════════════════════════════════
 async function loadAllData() {
-  setSyncStatus('syncing','Syncing...');
+  setSyncStatus('syncing', 'Syncing...');
   try {
     const today = new Date();
-    const from = new Date(today); from.setDate(today.getDate()-30);
-    const fromStr = from.toISOString().slice(0,10);
+    const from = new Date(today);
+    from.setDate(today.getDate() - 30);
+    const fromStr = from.toISOString().slice(0, 10);
 
     const { data, error } = await supabase
       .from('daily_logs')
@@ -412,14 +413,17 @@ async function loadAllData() {
       };
     });
 
-    setSyncStatus('synced','Synced');
-    document.getElementById('loadingOverlay').classList.add('hidden');
+    setSyncStatus('synced', 'Synced');
     renderAll();
+
   } catch (err) {
-    setSyncStatus('error','Offline — using local data');
-    document.getElementById('loadingOverlay').classList.add('hidden');
-    renderAll();
+    setSyncStatus('error', 'Offline — using local data');
     console.error('Load error:', err);
+    renderAll();
+
+  } finally {
+    // Always hide the overlay — no matter what happened above
+    document.getElementById('loadingOverlay').classList.add('hidden');
   }
 }
 
